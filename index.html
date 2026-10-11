@@ -1,1 +1,923 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeleFile Vault & Adsgram Mini App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Official Adsgram SDK -->
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        tg: {
+                            bg: '#17212b',
+                            card: '#242f3d',
+                            button: '#5288c1',
+                            text: '#f5f5f5',
+                            hint: '#708499',
+                            secondary: '#0e1621',
+                            accent: '#3390ec'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0e1621;
+            color: #f5f5f5;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #17212b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3390ec;
+            border-radius: 4px;
+        }
+        .pulse-border {
+            box-shadow: 0 0 15px rgba(51, 144, 236, 0.35);
+        }
+    </style>
+</head>
+<body class="font-sans min-h-screen flex flex-col pb-16">
 
+    <!-- Top Header Bar -->
+    <header class="sticky top-0 z-40 bg-tg-card/90 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold text-white leading-tight">TeleFile Vault</h1>
+                <p class="text-xs text-tg-hint flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Adsgram Powered
+                </p>
+            </div>
+        </div>
+
+        <!-- Admin Access Button -->
+        <button id="adminAuthBtn" onclick="openAdminModal()" class="px-3 py-1.5 rounded-lg bg-tg-bg border border-gray-700 hover:border-tg-accent text-xs font-medium text-tg-accent transition-all flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span id="adminBtnLabel">Admin Access</span>
+        </button>
+    </header>
+
+    <!-- Global Notification Toast -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-4 max-w-xs w-full">
+        <div id="toastInner" class="bg-tg-card border border-tg-accent text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center space-x-3">
+            <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+            <span id="toastMsg" class="text-xs font-medium">Notification message</span>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTENT CONTAINER -->
+    <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-4">
+
+        <!-- USER VIEW SECTION -->
+        <section id="userSection" class="space-y-4">
+            
+            <!-- Search and Filter Bar -->
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-tg-hint text-sm"></i>
+                <input type="text" id="searchInput" oninput="renderUserFiles()" placeholder="Search files, games, mods..." class="w-full bg-tg-card border border-gray-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-tg-hint focus:outline-none focus:border-tg-accent transition-colors">
+            </div>
+
+            <!-- File List Header -->
+            <div class="flex items-center justify-between pt-1">
+                <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-folder-open text-tg-accent"></i> Available Files (<span id="fileCountBadge">0</span>)
+                </h2>
+                <span class="text-[11px] text-tg-hint">Watch ad to unlock direct link</span>
+            </div>
+
+            <!-- Files Grid Container -->
+            <div id="userFilesList" class="space-y-3">
+                <!-- Dynamically populated files -->
+            </div>
+        </section>
+
+
+        <!-- ADMIN PANEL SECTION (HIDDEN BY DEFAULT) -->
+        <section id="adminSection" class="hidden space-y-5">
+            
+            <!-- Admin Top Banner -->
+            <div class="bg-tg-card p-4 rounded-2xl border border-tg-accent/40 flex justify-between items-center shadow-md">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-user-shield text-tg-accent"></i> Admin Control Panel
+                    </h2>
+                    <p class="text-xs text-tg-hint">Manage content, revenue & password settings</p>
+                </div>
+                <button onclick="logoutAdmin()" class="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-semibold hover:bg-red-500/20 transition-all flex items-center gap-1">
+                    <i class="fa-solid fa-right-from-bracket"></i> Exit
+                </button>
+            </div>
+
+            <!-- Admin Sub-Navigation Tabs -->
+            <div class="flex border-b border-gray-800 gap-4 text-xs font-semibold">
+                <button onclick="switchAdminSubTab('files')" id="subTabFiles" class="pb-2 border-b-2 border-tg-accent text-tg-accent transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-folder-tree"></i> Files & Analytics
+                </button>
+                <button onclick="switchAdminSubTab('security')" id="subTabSecurity" class="pb-2 border-b-2 border-transparent text-tg-hint hover:text-white transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-key"></i> Security & Ads Network
+                </button>
+            </div>
+
+            <!-- SUB-TAB 1: FILES & ANALYTICS -->
+            <div id="adminTabFilesContent" class="space-y-5">
+                <!-- Dashboard Analytics Overview Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="bg-tg-card p-3.5 rounded-xl border border-gray-800">
+                        <p class="text-[10px] text-tg-hint uppercase font-medium">Total Views</p>
+                        <p id="statTotalViews" class="text-xl font-bold text-white mt-1">0</p>
+                        <span class="text-[10px] text-blue-400 flex items-center mt-0.5"><i class="fa-solid fa-eye mr-1"></i> Impressions</span>
+                    </div>
+                    <div class="bg-tg-card p-3.5 rounded-xl border border-gray-800">
+                        <p class="text-[10px] text-tg-hint uppercase font-medium">Ad Clicks</p>
+                        <p id="statTotalClicks" class="text-xl font-bold text-amber-400 mt-1">0</p>
+                        <span class="text-[10px] text-amber-400/80 flex items-center mt-0.5"><i class="fa-solid fa-rectangle-ad mr-1"></i> Completed ads</span>
+                    </div>
+                    <div class="bg-tg-card p-3.5 rounded-xl border border-gray-800">
+                        <p class="text-[10px] text-tg-hint uppercase font-medium">Downloads</p>
+                        <p id="statTotalDownloads" class="text-xl font-bold text-emerald-400 mt-1">0</p>
+                        <span class="text-[10px] text-emerald-400/80 flex items-center mt-0.5"><i class="fa-solid fa-download mr-1"></i> Files unlocked</span>
+                    </div>
+                    <div class="bg-tg-card p-3.5 rounded-xl border border-gray-800">
+                        <p class="text-[10px] text-tg-hint uppercase font-medium">Adsgram Est. Revenue</p>
+                        <p id="statTotalRevenue" class="text-xl font-bold text-purple-400 mt-1">$0.00</p>
+                        <span class="text-[10px] text-purple-400/80 flex items-center mt-0.5"><i class="fa-solid fa-coins mr-1"></i> Total earned</span>
+                    </div>
+                </div>
+
+                <!-- Upload / Add New File Form -->
+                <div class="bg-tg-card p-4 rounded-xl border border-gray-800 space-y-3">
+                    <h3 id="formTitle" class="text-xs font-bold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-circle-plus"></i> Upload New File
+                    </h3>
+
+                    <input type="hidden" id="editFileId" value="">
+
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-tg-hint mb-1">File Title *</label>
+                                <input type="text" id="inputTitle" placeholder="e.g. GTA V Mobile Mod APK v2.1" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-tg-hint mb-1">Subheading / Description *</label>
+                                <input type="text" id="inputSubtitle" placeholder="e.g. Unlimited Money & Unlocked Graphics" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs text-tg-hint mb-1">Thumbnail Image URL *</label>
+                                <input type="url" id="inputThumbnail" placeholder="https://example.com/thumb.jpg" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-tg-hint mb-1">Direct Download URL *</label>
+                                <input type="url" id="inputDownloadUrl" placeholder="https://example.com/file.zip" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-tg-hint mb-1">File Size *</label>
+                                <input type="text" id="inputFileSize" placeholder="e.g. 45.2 MB" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-2 pt-1">
+                            <button onclick="saveFileSubmit()" id="btnSaveFile" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> Add File To Vault
+                            </button>
+                            <button onclick="resetFileForm()" id="btnCancelEdit" class="hidden px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold rounded-lg transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Existing Files Table -->
+                <div class="bg-tg-card rounded-xl border border-gray-800 overflow-hidden">
+                    <div class="p-3 border-b border-gray-800 flex justify-between items-center">
+                        <h3 class="text-xs font-bold uppercase text-gray-300">File Inventory & Stats</h3>
+                        <span class="text-[11px] text-tg-hint">Realtime views & clicks</span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-tg-bg text-[10px] uppercase text-tg-hint border-b border-gray-800">
+                                    <th class="p-3">File Title</th>
+                                    <th class="p-3 text-center">Views</th>
+                                    <th class="p-3 text-center">Ad Clicks</th>
+                                    <th class="p-3 text-center">Downloads</th>
+                                    <th class="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminFilesTable" class="divide-y divide-gray-800 text-xs">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-TAB 2: SECURITY & ADSGRAM CONFIGURATION -->
+            <div id="adminTabSecurityContent" class="hidden space-y-4">
+                
+                <!-- Customize Admin Password -->
+                <div class="bg-tg-card p-4 rounded-xl border border-gray-800 space-y-3">
+                    <h3 class="text-xs font-bold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-lock"></i> Customize Admin Password
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-tg-hint mb-1">New Admin Password</label>
+                            <input type="password" id="cfgNewPassword" placeholder="Enter new password" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-tg-hint mb-1">Confirm New Password</label>
+                            <input type="password" id="cfgConfirmPassword" placeholder="Confirm password" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                        </div>
+                    </div>
+                    <button onclick="updateAdminPassword()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-key"></i> Save New Password
+                    </button>
+                </div>
+
+                <!-- Adsgram Configuration Box -->
+                <div class="bg-tg-card p-4 rounded-xl border border-gray-800 space-y-3">
+                    <h3 class="text-xs font-bold uppercase text-tg-accent tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-sliders"></i> Adsgram Ad Network Integration
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-tg-hint mb-1">Adsgram Block ID (Publisher ID)</label>
+                            <input type="text" id="cfgAdsgramBlockId" placeholder="e.g. 1234" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-tg-hint mb-1">Estimated Revenue Per Ad Watch ($ USD)</label>
+                            <input type="number" step="0.001" id="cfgRevenueRate" placeholder="0.015" class="w-full bg-tg-bg border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-tg-accent">
+                        </div>
+                    </div>
+                    <button onclick="saveAdsgramConfig()" class="px-4 py-2 bg-tg-accent hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Network Config
+                    </button>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- MODAL: Password Protected Admin Auth Overlay -->
+    <div id="adminAuthModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-tg-card border border-gray-800 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative">
+            <button onclick="closeAdminModal()" class="absolute top-4 right-4 text-tg-hint hover:text-white">
+                <i class="fa-solid fa-xmark text-base"></i>
+            </button>
+            
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-tg-accent/20 border border-tg-accent rounded-full flex items-center justify-center mx-auto text-tg-accent">
+                    <i class="fa-solid fa-lock text-xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">Admin Authentication</h3>
+                <p class="text-xs text-tg-hint">Enter password to unlock Control Panel</p>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <input type="password" id="adminPasswordInput" placeholder="Password" class="w-full bg-tg-bg border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-tg-accent">
+                </div>
+                <button onclick="verifyAdminPassword()" class="w-full py-2.5 bg-tg-accent hover:bg-blue-600 text-white font-semibold text-xs rounded-xl shadow-lg transition-colors">
+                    Unlock Panel
+                </button>
+            </div>
+            <p class="text-[10px] text-center text-tg-hint">Default password: <code class="text-tg-accent">admin123</code></p>
+        </div>
+    </div>
+
+    <!-- MODAL: Adsgram Rewarded Ad Playback Overlay -->
+    <div id="adModal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-tg-card border border-gray-800 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl relative text-center">
+            
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/30 uppercase">
+                        Adsgram Network
+                    </span>
+                    <span id="adBlockIdTag" class="text-[10px] text-tg-hint font-mono">ID: block_1234</span>
+                </div>
+                <span class="text-xs text-tg-hint" id="adTimerText">Ad plays for 5s</span>
+            </div>
+
+            <div id="adContentArea" class="bg-gradient-to-br from-indigo-900/40 via-tg-bg to-purple-900/40 border border-indigo-500/30 rounded-xl p-6 min-h-[180px] flex flex-col items-center justify-center space-y-3 relative overflow-hidden">
+                <div class="w-14 h-14 bg-indigo-600/30 border border-indigo-400/40 rounded-full flex items-center justify-center text-indigo-300 text-2xl animate-bounce">
+                    <i class="fa-solid fa-play"></i>
+                </div>
+                <div class="space-y-1 z-10">
+                    <h4 class="text-base font-bold text-white">Sponsored Rewarded Ad</h4>
+                    <p class="text-xs text-gray-300">Watch full ad video to unlock download link.</p>
+                </div>
+                
+                <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
+                    <div id="adProgressBar" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full w-0 transition-all duration-1000 ease-linear"></div>
+                </div>
+            </div>
+
+            <div class="text-left bg-tg-bg p-3 rounded-lg border border-gray-800 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-white truncate max-w-[200px]" id="adTargetTitle">File Title</p>
+                    <p class="text-[10px] text-emerald-400">Status: Downloading File Unlocked</p>
+                </div>
+                <span class="text-xs font-mono text-tg-hint" id="adTargetSize">0 MB</span>
+            </div>
+
+            <div id="adActionContainer" class="pt-1">
+                <button id="adCompleteBtn" disabled class="w-full py-3 bg-gray-800 text-gray-400 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-not-allowed">
+                    <i class="fa-solid fa-lock"></i>
+                    <span>Watching Sponsored Ad (5s)...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM TAB NAVIGATION -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-tg-card border-t border-gray-800 py-2.5 px-6 flex justify-around items-center z-40">
+        <button onclick="switchTab('user')" id="navTabUser" class="flex flex-col items-center gap-1 text-tg-accent transition-colors">
+            <i class="fa-solid fa-folder-open text-base"></i>
+            <span class="text-[10px] font-semibold">Vault Files</span>
+        </button>
+        <button onclick="switchTab('admin')" id="navTabAdmin" class="flex flex-col items-center gap-1 text-tg-hint hover:text-white transition-colors">
+            <i class="fa-solid fa-sliders text-base"></i>
+            <span class="text-[10px] font-semibold">Admin Panel</span>
+        </button>
+    </nav>
+
+
+    <script>
+        /* =================================================================
+           TELEGRAM MINI APP STATE MANAGEMENT
+           ================================================================= */
+        
+        // Telegram WebApp SDK Setup
+        let tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            if (tg.colorScheme === 'light') {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        // Initial Seed Files
+        const INITIAL_FILES = [
+            {
+                id: 'file_1',
+                title: 'GTA San Andreas HD Remaster APK',
+                subtitle: 'Full game unlocked with high definition textures & mods',
+                thumbnail: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=300&q=80',
+                downloadUrl: 'https://example.com/files/gta-sa-hd.apk',
+                size: '1.8 GB',
+                views: 1240,
+                clicks: 430,
+                downloads: 382
+            },
+            {
+                id: 'file_2',
+                title: 'Cyberpunk 2077 Wallpapers 4K Pack',
+                subtitle: 'Ultra high resolution futuristic background images',
+                thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=300&q=80',
+                downloadUrl: 'https://example.com/files/cyberpunk-4k.zip',
+                size: '240 MB',
+                views: 890,
+                clicks: 310,
+                downloads: 290
+            },
+            {
+                id: 'file_3',
+                title: 'FL Studio Mobile Producer Presets',
+                subtitle: 'Exclusive trap & synthwave beatmaking soundbank',
+                thumbnail: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=300&q=80',
+                downloadUrl: 'https://example.com/files/fl-presets.zip',
+                size: '85 MB',
+                views: 2150,
+                clicks: 820,
+                downloads: 710
+            }
+        ];
+
+        // Core App State stored in LocalStorage
+        let appState = {
+            isAdminLoggedIn: false,
+            adminPassword: 'admin123',
+            adsgramBlockId: 'block_1234',
+            revenuePerAd: 0.015,
+            files: []
+        };
+
+        // Initialize Application
+        function initApp() {
+            const savedState = localStorage.getItem('telefile_vault_state');
+            if (savedState) {
+                try {
+                    appState = { ...appState, ...JSON.parse(savedState) };
+                } catch(e) {
+                    console.error("Failed to load local storage state", e);
+                }
+            } else {
+                appState.files = INITIAL_FILES;
+                saveState();
+            }
+
+            // Populate Settings Inputs
+            document.getElementById('cfgAdsgramBlockId').value = appState.adsgramBlockId || '';
+            document.getElementById('cfgRevenueRate').value = appState.revenuePerAd;
+
+            renderUserFiles();
+            renderAdminStats();
+            renderAdminFilesTable();
+        }
+
+        function saveState() {
+            localStorage.setItem('telefile_vault_state', JSON.stringify(appState));
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.innerText = message;
+            
+            if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400 text-lg';
+            } else if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-red-400 text-lg';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-info text-blue-400 text-lg';
+            }
+
+            toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-4');
+            }, 3000);
+        }
+
+        /* =================================================================
+           USER FRONT-END & ADSGRAM REWARDED ADS LOGIC
+           ================================================================= */
+        
+        function renderUserFiles() {
+            const container = document.getElementById('userFilesList');
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            
+            const filteredFiles = appState.files.filter(f => 
+                f.title.toLowerCase().includes(searchQuery) || 
+                f.subtitle.toLowerCase().includes(searchQuery)
+            );
+
+            document.getElementById('fileCountBadge').innerText = filteredFiles.length;
+
+            if (filteredFiles.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-tg-card rounded-xl border border-gray-800">
+                        <i class="fa-solid fa-folder-open text-3xl text-tg-hint mb-2"></i>
+                        <p class="text-sm text-tg-hint">No files found matching search query.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filteredFiles.map(file => `
+                <div class="bg-tg-card rounded-2xl p-3.5 border border-gray-800 hover:border-gray-700 transition-all flex flex-col sm:flex-row gap-3.5 items-start sm:items-center">
+                    <div class="relative w-full sm:w-24 h-32 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-tg-bg border border-gray-800">
+                        <img src="${file.thumbnail}" alt="${file.title}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/300x300/17212b/3390ec?text=File+Thumb'">
+                        <span class="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm text-[10px] px-1.5 py-0.5 rounded text-gray-200 font-mono">
+                            ${file.size}
+                        </span>
+                    </div>
+
+                    <div class="flex-1 min-w-0 space-y-1 w-full">
+                        <h3 class="text-sm font-bold text-white leading-tight truncate">${file.title}</h3>
+                        <p class="text-xs text-tg-hint line-clamp-2">${file.subtitle}</p>
+                        
+                        <div class="flex items-center gap-3 pt-1 text-[11px] text-gray-400">
+                            <span class="flex items-center gap-1"><i class="fa-solid fa-eye text-tg-hint"></i> ${file.views}</span>
+                            <span class="flex items-center gap-1"><i class="fa-solid fa-rectangle-ad text-amber-400"></i> ${file.clicks}</span>
+                            <span class="flex items-center gap-1"><i class="fa-solid fa-download text-emerald-400"></i> ${file.downloads}</span>
+                        </div>
+                    </div>
+
+                    <div class="w-full sm:w-auto shrink-0 pt-2 sm:pt-0">
+                        <button onclick="startAdDownloadFlow('${file.id}')" class="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-tg-accent to-blue-600 hover:from-blue-500 hover:to-indigo-600 text-white font-semibold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 pulse-border">
+                            <i class="fa-solid fa-circle-play text-amber-300"></i>
+                            <span>Watch Ad & Download</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        let currentAdTargetFile = null;
+        let adCountdownInterval = null;
+
+        function startAdDownloadFlow(fileId) {
+            const file = appState.files.find(f => f.id === fileId);
+            if (!file) return;
+
+            currentAdTargetFile = file;
+            file.views += 1;
+            saveState();
+            renderAdminStats();
+
+            // Try Real Adsgram Controller if Block ID is present
+            if (window.Adsgram && appState.adsgramBlockId && appState.adsgramBlockId !== 'block_1234') {
+                try {
+                    const AdController = window.Adsgram.init({ blockId: appState.adsgramBlockId });
+                    AdController.show().then(() => {
+                        // Reward granted
+                        completeAdAndTriggerDownload();
+                    }).catch((error) => {
+                        console.warn("Adsgram network error or ad skipped:", error);
+                        // Fallback to internal simulation if ad fails
+                        runSimulatedAdOverlay(file);
+                    });
+                    return;
+                } catch(e) {
+                    console.error("Adsgram SDK init error, fallback to modal:", e);
+                }
+            }
+
+            // Fallback Simulated Adsgram Workflow
+            runSimulatedAdOverlay(file);
+        }
+
+        function runSimulatedAdOverlay(file) {
+            document.getElementById('adBlockIdTag').innerText = `ID: ${appState.adsgramBlockId || 'block_1234'}`;
+            document.getElementById('adTargetTitle').innerText = file.title;
+            document.getElementById('adTargetSize').innerText = file.size;
+            
+            const modal = document.getElementById('adModal');
+            const btn = document.getElementById('adCompleteBtn');
+            const progressBar = document.getElementById('adProgressBar');
+            const timerText = document.getElementById('adTimerText');
+
+            modal.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            btn.disabled = true;
+            btn.className = "w-full py-3 bg-gray-800 text-gray-400 font-bold text-xs rounded-xl cursor-not-allowed flex items-center justify-center gap-2";
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Watching Sponsored Ad (5s)...`;
+
+            let timeLeft = 5;
+            timerText.innerText = `Ad duration: ${timeLeft}s`;
+
+            clearInterval(adCountdownInterval);
+            adCountdownInterval = setInterval(() => {
+                timeLeft--;
+                const progressPct = ((5 - timeLeft) / 5) * 100;
+                progressBar.style.width = `${progressPct}%`;
+                timerText.innerText = `Ad duration: ${timeLeft}s`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(adCountdownInterval);
+                    timerText.innerText = `Ad Completed!`;
+                    btn.disabled = false;
+                    btn.className = "w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 animate-bounce";
+                    btn.innerHTML = `<i class="fa-solid fa-download"></i> Unlock & Download File Now`;
+                    btn.onclick = () => {
+                        document.getElementById('adModal').classList.add('hidden');
+                        completeAdAndTriggerDownload();
+                    };
+                }
+            }, 1000);
+        }
+
+        function completeAdAndTriggerDownload() {
+            if (!currentAdTargetFile) return;
+
+            currentAdTargetFile.clicks += 1;
+            currentAdTargetFile.downloads += 1;
+            
+            saveState();
+            renderUserFiles();
+            renderAdminStats();
+            renderAdminFilesTable();
+
+            showToast(`Ad rewarded! Downloading ${currentAdTargetFile.title}`, 'success');
+
+            setTimeout(() => {
+                window.open(currentAdTargetFile.downloadUrl, '_blank');
+            }, 300);
+        }
+
+
+        /* =================================================================
+           ADMIN CONTROL PANEL, SECURITY & CRUD OPERATIONS
+           ================================================================= */
+
+        function openAdminModal() {
+            if (appState.isAdminLoggedIn) {
+                switchTab('admin');
+            } else {
+                document.getElementById('adminAuthModal').classList.remove('hidden');
+            }
+        }
+
+        function closeAdminModal() {
+            document.getElementById('adminAuthModal').classList.add('hidden');
+        }
+
+        function verifyAdminPassword() {
+            const input = document.getElementById('adminPasswordInput').value;
+            if (input === appState.adminPassword) {
+                appState.isAdminLoggedIn = true;
+                saveState();
+                closeAdminModal();
+                switchTab('admin');
+                showToast('Welcome Admin!', 'success');
+            } else {
+                showToast('Invalid password!', 'error');
+            }
+        }
+
+        function updateAdminPassword() {
+            const newPass = document.getElementById('cfgNewPassword').value.trim();
+            const confirmPass = document.getElementById('cfgConfirmPassword').value.trim();
+
+            if (!newPass || newPass.length < 4) {
+                showToast('Password must be at least 4 characters long', 'error');
+                return;
+            }
+
+            if (newPass !== confirmPass) {
+                showToast('Passwords do not match!', 'error');
+                return;
+            }
+
+            appState.adminPassword = newPass;
+            saveState();
+
+            document.getElementById('cfgNewPassword').value = '';
+            document.getElementById('cfgConfirmPassword').value = '';
+            showToast('Admin password updated successfully!', 'success');
+        }
+
+        function logoutAdmin() {
+            appState.isAdminLoggedIn = false;
+            saveState();
+            switchTab('user');
+            showToast('Logged out from Admin', 'info');
+        }
+
+        function switchTab(tab) {
+            const userSec = document.getElementById('userSection');
+            const adminSec = document.getElementById('adminSection');
+            const navUser = document.getElementById('navTabUser');
+            const navAdmin = document.getElementById('navTabAdmin');
+            const adminBtnLabel = document.getElementById('adminBtnLabel');
+
+            if (tab === 'admin') {
+                if (!appState.isAdminLoggedIn) {
+                    openAdminModal();
+                    return;
+                }
+                userSec.classList.add('hidden');
+                adminSec.classList.remove('hidden');
+                
+                navAdmin.className = "flex flex-col items-center gap-1 text-tg-accent transition-colors";
+                navUser.className = "flex flex-col items-center gap-1 text-tg-hint hover:text-white transition-colors";
+                adminBtnLabel.innerText = "Admin Panel";
+                
+                renderAdminStats();
+                renderAdminFilesTable();
+            } else {
+                userSec.classList.remove('hidden');
+                adminSec.classList.add('hidden');
+
+                navUser.className = "flex flex-col items-center gap-1 text-tg-accent transition-colors";
+                navAdmin.className = "flex flex-col items-center gap-1 text-tg-hint hover:text-white transition-colors";
+                adminBtnLabel.innerText = appState.isAdminLoggedIn ? "Admin Logged In" : "Admin Access";
+                
+                renderUserFiles();
+            }
+        }
+
+        function switchAdminSubTab(subTab) {
+            const filesTab = document.getElementById('subTabFiles');
+            const securityTab = document.getElementById('subTabSecurity');
+            const filesContent = document.getElementById('adminTabFilesContent');
+            const securityContent = document.getElementById('adminTabSecurityContent');
+
+            if (subTab === 'security') {
+                securityContent.classList.remove('hidden');
+                filesContent.classList.add('hidden');
+
+                securityTab.className = "pb-2 border-b-2 border-tg-accent text-tg-accent transition-all flex items-center gap-1.5";
+                filesTab.className = "pb-2 border-b-2 border-transparent text-tg-hint hover:text-white transition-all flex items-center gap-1.5";
+            } else {
+                filesContent.classList.remove('hidden');
+                securityContent.classList.add('hidden');
+
+                filesTab.className = "pb-2 border-b-2 border-tg-accent text-tg-accent transition-all flex items-center gap-1.5";
+                securityTab.className = "pb-2 border-b-2 border-transparent text-tg-hint hover:text-white transition-all flex items-center gap-1.5";
+            }
+        }
+
+        function renderAdminStats() {
+            let totalViews = 0;
+            let totalClicks = 0;
+            let totalDownloads = 0;
+
+            appState.files.forEach(f => {
+                totalViews += f.views || 0;
+                totalClicks += f.clicks || 0;
+                totalDownloads += f.downloads || 0;
+            });
+
+            const totalRevenue = totalClicks * parseFloat(appState.revenuePerAd || 0);
+
+            document.getElementById('statTotalViews').innerText = totalViews;
+            document.getElementById('statTotalClicks').innerText = totalClicks;
+            document.getElementById('statTotalDownloads').innerText = totalDownloads;
+            document.getElementById('statTotalRevenue').innerText = `$${totalRevenue.toFixed(2)}`;
+        }
+
+        function renderAdminFilesTable() {
+            const tbody = document.getElementById('adminFilesTable');
+            
+            if (appState.files.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="p-4 text-center text-tg-hint">No files added yet. Upload your first file.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = appState.files.map(file => `
+                <tr class="hover:bg-tg-bg/50 transition-colors">
+                    <td class="p-3">
+                        <div class="flex items-center space-x-3">
+                            <img src="${file.thumbnail}" class="w-10 h-10 rounded-lg object-cover bg-tg-bg border border-gray-800" onerror="this.src='https://placehold.co/100x100/17212b/3390ec?text=Icon'">
+                            <div>
+                                <p class="font-bold text-white text-xs truncate max-w-[150px] sm:max-w-xs">${file.title}</p>
+                                <p class="text-[10px] text-tg-hint">${file.size}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="p-3 text-center text-gray-300 font-mono">${file.views}</td>
+                    <td class="p-3 text-center text-amber-400 font-mono">${file.clicks}</td>
+                    <td class="p-3 text-center text-emerald-400 font-mono">${file.downloads}</td>
+                    <td class="p-3 text-right">
+                        <div class="flex items-center justify-end space-x-2">
+                            <button onclick="editFile('${file.id}')" class="p-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-all" title="Edit">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button onclick="deleteFile('${file.id}')" class="p-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all" title="Delete">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function saveAdsgramConfig() {
+            const blockId = document.getElementById('cfgAdsgramBlockId').value.trim();
+            const revRate = parseFloat(document.getElementById('cfgRevenueRate').value);
+
+            if (isNaN(revRate)) {
+                showToast('Please enter a valid revenue rate', 'error');
+                return;
+            }
+
+            appState.adsgramBlockId = blockId;
+            appState.revenuePerAd = revRate;
+            saveState();
+            renderAdminStats();
+            showToast('Adsgram settings updated successfully', 'success');
+        }
+
+        function saveFileSubmit() {
+            const editId = document.getElementById('editFileId').value;
+            const title = document.getElementById('inputTitle').value.trim();
+            const subtitle = document.getElementById('inputSubtitle').value.trim();
+            const thumbnail = document.getElementById('inputThumbnail').value.trim();
+            const downloadUrl = document.getElementById('inputDownloadUrl').value.trim();
+            const size = document.getElementById('inputFileSize').value.trim();
+
+            if (!title || !subtitle || !thumbnail || !downloadUrl || !size) {
+                showToast('Please fill in all file fields!', 'error');
+                return;
+            }
+
+            if (editId) {
+                const index = appState.files.findIndex(f => f.id === editId);
+                if (index !== -1) {
+                    appState.files[index] = {
+                        ...appState.files[index],
+                        title,
+                        subtitle,
+                        thumbnail,
+                        downloadUrl,
+                        size
+                    };
+                    showToast('File updated successfully', 'success');
+                }
+            } else {
+                const newFile = {
+                    id: 'file_' + Date.now(),
+                    title,
+                    subtitle,
+                    thumbnail,
+                    downloadUrl,
+                    size,
+                    views: 0,
+                    clicks: 0,
+                    downloads: 0
+                };
+                appState.files.unshift(newFile);
+                showToast('New file added to Vault', 'success');
+            }
+
+            saveState();
+            resetFileForm();
+            renderAdminFilesTable();
+            renderAdminStats();
+            renderUserFiles();
+        }
+
+        function editFile(id) {
+            const file = appState.files.find(f => f.id === id);
+            if (!file) return;
+
+            switchAdminSubTab('files');
+
+            document.getElementById('editFileId').value = file.id;
+            document.getElementById('inputTitle').value = file.title;
+            document.getElementById('inputSubtitle').value = file.subtitle;
+            document.getElementById('inputThumbnail').value = file.thumbnail;
+            document.getElementById('inputDownloadUrl').value = file.downloadUrl;
+            document.getElementById('inputFileSize').value = file.size;
+
+            document.getElementById('formTitle').innerText = 'Edit File Details';
+            document.getElementById('btnSaveFile').innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Update File`;
+            document.getElementById('btnCancelEdit').classList.remove('hidden');
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetFileForm() {
+            document.getElementById('editFileId').value = '';
+            document.getElementById('inputTitle').value = '';
+            document.getElementById('inputSubtitle').value = '';
+            document.getElementById('inputThumbnail').value = '';
+            document.getElementById('inputDownloadUrl').value = '';
+            document.getElementById('inputFileSize').value = '';
+
+            document.getElementById('formTitle').innerText = 'Upload New File Link';
+            document.getElementById('btnSaveFile').innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Add File To Vault`;
+            document.getElementById('btnCancelEdit').classList.add('hidden');
+        }
+
+        function deleteFile(id) {
+            if (confirm("Are you sure you want to delete this file link?")) {
+                appState.files = appState.files.filter(f => f.id !== id);
+                saveState();
+                renderAdminFilesTable();
+                renderAdminStats();
+                renderUserFiles();
+                showToast('File deleted', 'info');
+            }
+        }
+
+        window.onload = function() {
+            initApp();
+        };
+    </script>
+</body>
+</html>
