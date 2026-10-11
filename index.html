@@ -70,7 +70,7 @@
             <div>
                 <h1 class="text-base font-bold text-white leading-tight">TeleFile Vault</h1>
                 <p class="text-xs text-tg-hint flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Adsgram Powered
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Firebase Realtime Sync
                 </p>
             </div>
         </div>
@@ -219,7 +219,7 @@
                 <div class="bg-tg-card rounded-xl border border-gray-800 overflow-hidden">
                     <div class="p-3 border-b border-gray-800 flex justify-between items-center">
                         <h3 class="text-xs font-bold uppercase text-gray-300">File Inventory & Stats</h3>
-                        <span class="text-[11px] text-tg-hint">Realtime views & clicks</span>
+                        <span class="text-[11px] text-tg-hint">Realtime cloud sync</span>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -374,12 +374,29 @@
         </button>
     </nav>
 
+    <!-- Firebase App (Compat SDKs for Realtime Database Sync) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
     <script>
         /* =================================================================
-           TELEGRAM MINI APP STATE MANAGEMENT
+           FIREBASE & TELEGRAM MINI APP CONFIGURATION
            ================================================================= */
         
+        const firebaseConfig = {
+            apiKey: "AIzaSyBCCnFnKe4-tjkl9YscLd7cHbAxnjNAS9o",
+            authDomain: "adsgram-731ad.firebaseapp.com",
+            databaseURL: "https://adsgram-731ad-default-rtdb.firebaseio.com",
+            projectId: "adsgram-731ad",
+            storageBucket: "adsgram-731ad.firebasestorage.app",
+            messagingSenderId: "391881565144",
+            appId: "1:391881565144:web:785420c79a77cba71b08ad"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
         // Telegram WebApp SDK Setup
         let tg = window.Telegram?.WebApp;
         if (tg) {
@@ -427,7 +444,7 @@
             }
         ];
 
-        // Core App State stored in LocalStorage
+        // Core App State
         let appState = {
             isAdminLoggedIn: false,
             adminPassword: 'admin123',
@@ -436,31 +453,45 @@
             files: []
         };
 
-        // Initialize Application
+        // Initialize Application & Firebase Live Listeners
         function initApp() {
-            const savedState = localStorage.getItem('telefile_vault_state');
-            if (savedState) {
-                try {
-                    appState = { ...appState, ...JSON.parse(savedState) };
-                } catch(e) {
-                    console.error("Failed to load local storage state", e);
-                }
-            } else {
-                appState.files = INITIAL_FILES;
-                saveState();
+            // Check local session for admin login status only
+            const savedAdminLogin = localStorage.getItem('telefile_admin_logged');
+            if (savedAdminLogin === 'true') {
+                appState.isAdminLoggedIn = true;
             }
 
-            // Populate Settings Inputs
-            document.getElementById('cfgAdsgramBlockId').value = appState.adsgramBlockId || '';
-            document.getElementById('cfgRevenueRate').value = appState.revenuePerAd;
+            // Real-time synchronization from Firebase Database
+            db.ref('miniapp').on('value', (snapshot) => {
+                const serverData = snapshot.val();
+                if (serverData) {
+                    appState.files = serverData.files || INITIAL_FILES;
+                    if (serverData.adminPassword) appState.adminPassword = serverData.adminPassword;
+                    if (serverData.adsgramBlockId) appState.adsgramBlockId = serverData.adsgramBlockId;
+                    if (serverData.revenuePerAd) appState.revenuePerAd = serverData.revenuePerAd;
+                } else {
+                    // Seed initial data if empty
+                    appState.files = INITIAL_FILES;
+                    syncToFirebase();
+                }
 
-            renderUserFiles();
-            renderAdminStats();
-            renderAdminFilesTable();
+                // Populate Settings Inputs
+                document.getElementById('cfgAdsgramBlockId').value = appState.adsgramBlockId || '';
+                document.getElementById('cfgRevenueRate').value = appState.revenuePerAd;
+
+                renderUserFiles();
+                renderAdminStats();
+                renderAdminFilesTable();
+            });
         }
 
-        function saveState() {
-            localStorage.setItem('telefile_vault_state', JSON.stringify(appState));
+        function syncToFirebase() {
+            db.ref('miniapp').set({
+                files: appState.files,
+                adminPassword: appState.adminPassword,
+                adsgramBlockId: appState.adsgramBlockId,
+                revenuePerAd: appState.revenuePerAd
+            });
         }
 
         function showToast(message, type = 'success') {
@@ -550,8 +581,8 @@
             if (!file) return;
 
             currentAdTargetFile = file;
-            file.views += 1;
-            saveState();
+            file.views = (file.views || 0) + 1;
+            syncToFirebase();
             renderAdminStats();
 
             // Try Real Adsgram Controller if Block ID is present
@@ -559,11 +590,9 @@
                 try {
                     const AdController = window.Adsgram.init({ blockId: appState.adsgramBlockId });
                     AdController.show().then(() => {
-                        // Reward granted
                         completeAdAndTriggerDownload();
                     }).catch((error) => {
                         console.warn("Adsgram network error or ad skipped:", error);
-                        // Fallback to internal simulation if ad fails
                         runSimulatedAdOverlay(file);
                     });
                     return;
@@ -619,10 +648,10 @@
         function completeAdAndTriggerDownload() {
             if (!currentAdTargetFile) return;
 
-            currentAdTargetFile.clicks += 1;
-            currentAdTargetFile.downloads += 1;
+            currentAdTargetFile.clicks = (currentAdTargetFile.clicks || 0) + 1;
+            currentAdTargetFile.downloads = (currentAdTargetFile.downloads || 0) + 1;
             
-            saveState();
+            syncToFirebase();
             renderUserFiles();
             renderAdminStats();
             renderAdminFilesTable();
@@ -655,7 +684,7 @@
             const input = document.getElementById('adminPasswordInput').value;
             if (input === appState.adminPassword) {
                 appState.isAdminLoggedIn = true;
-                saveState();
+                localStorage.setItem('telefile_admin_logged', 'true');
                 closeAdminModal();
                 switchTab('admin');
                 showToast('Welcome Admin!', 'success');
@@ -679,7 +708,7 @@
             }
 
             appState.adminPassword = newPass;
-            saveState();
+            syncToFirebase();
 
             document.getElementById('cfgNewPassword').value = '';
             document.getElementById('cfgConfirmPassword').value = '';
@@ -688,7 +717,7 @@
 
         function logoutAdmin() {
             appState.isAdminLoggedIn = false;
-            saveState();
+            localStorage.removeItem('telefile_admin_logged');
             switchTab('user');
             showToast('Logged out from Admin', 'info');
         }
@@ -752,11 +781,13 @@
             let totalClicks = 0;
             let totalDownloads = 0;
 
-            appState.files.forEach(f => {
-                totalViews += f.views || 0;
-                totalClicks += f.clicks || 0;
-                totalDownloads += f.downloads || 0;
-            });
+            if (appState.files) {
+                appState.files.forEach(f => {
+                    totalViews += f.views || 0;
+                    totalClicks += f.clicks || 0;
+                    totalDownloads += f.downloads || 0;
+                });
+            }
 
             const totalRevenue = totalClicks * parseFloat(appState.revenuePerAd || 0);
 
@@ -769,7 +800,7 @@
         function renderAdminFilesTable() {
             const tbody = document.getElementById('adminFilesTable');
             
-            if (appState.files.length === 0) {
+            if (!appState.files || appState.files.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="5" class="p-4 text-center text-tg-hint">No files added yet. Upload your first file.</td>
@@ -789,9 +820,9 @@
                             </div>
                         </div>
                     </td>
-                    <td class="p-3 text-center text-gray-300 font-mono">${file.views}</td>
-                    <td class="p-3 text-center text-amber-400 font-mono">${file.clicks}</td>
-                    <td class="p-3 text-center text-emerald-400 font-mono">${file.downloads}</td>
+                    <td class="p-3 text-center text-gray-300 font-mono">${file.views || 0}</td>
+                    <td class="p-3 text-center text-amber-400 font-mono">${file.clicks || 0}</td>
+                    <td class="p-3 text-center text-emerald-400 font-mono">${file.downloads || 0}</td>
                     <td class="p-3 text-right">
                         <div class="flex items-center justify-end space-x-2">
                             <button onclick="editFile('${file.id}')" class="p-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-all" title="Edit">
@@ -817,7 +848,7 @@
 
             appState.adsgramBlockId = blockId;
             appState.revenuePerAd = revRate;
-            saveState();
+            syncToFirebase();
             renderAdminStats();
             showToast('Adsgram settings updated successfully', 'success');
         }
@@ -834,6 +865,8 @@
                 showToast('Please fill in all file fields!', 'error');
                 return;
             }
+
+            if (!appState.files) appState.files = [];
 
             if (editId) {
                 const index = appState.files.findIndex(f => f.id === editId);
@@ -864,11 +897,8 @@
                 showToast('New file added to Vault', 'success');
             }
 
-            saveState();
+            syncToFirebase();
             resetFileForm();
-            renderAdminFilesTable();
-            renderAdminStats();
-            renderUserFiles();
         }
 
         function editFile(id) {
@@ -907,10 +937,7 @@
         function deleteFile(id) {
             if (confirm("Are you sure you want to delete this file link?")) {
                 appState.files = appState.files.filter(f => f.id !== id);
-                saveState();
-                renderAdminFilesTable();
-                renderAdminStats();
-                renderUserFiles();
+                syncToFirebase();
                 showToast('File deleted', 'info');
             }
         }
